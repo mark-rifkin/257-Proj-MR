@@ -1,5 +1,5 @@
 clc; clear; close all;
-%% YALMIP (doesn't work)
+%% YALMIP
 x = sdpvar(2,1); % [x1, x2]
 u = sdpvar(1);
 
@@ -14,10 +14,10 @@ HJB = jacobian(J, x) * f + g; % HJB
 Q = sdpvar(4, 4);
 sig = monolist([x; u], 1)' * Q * monolist([x; u], 1);
 
-target = [1; 0; 0;]' * S * [1; 0; 0]; % target constraint (way to use subs?)
+target = [1; 0; 0;]' * S * [1; 0; 0]; % target constraint (wasy to use subs?)
  
 % Collect constraints
-F = [Q>=0, coefficients(HJB - sig, x) == 0, target == 0];
+F = [Q>=0, coefficients(HJB - sig, [x; u]) == 0, target == 0];
 
 % set objective (maximize J at x0)
 x0 = [1; 0.5; 1];
@@ -26,14 +26,21 @@ obj = -x0'*S*x0;
 options = sdpsettings('solver','mosek');
 optimize(F,obj,options);
 
-%% SOSTools (works)
+S_val = value(S);
+
+% check S from ARE
+[~, S_are] = lqr([0, 1; 0, 0], [0; 1], [1, 0; 0, 1], 1);
+
+
+%% SOSTools (to check)
+clc; clear; close all;
 var = mpvar('var', [3 1]);
 x = var(1:2);
 u = var(end);
 
 prog = sosprogram(var);
 
-degree = 1;
+degree = 2;
 [prog, J] = sospolyvar(prog, monomials(x, 0:degree));
 
 f = [x(2); u]; % double integrator dynamics dx/dt
