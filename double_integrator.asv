@@ -1,4 +1,4 @@
-%% YALMIP OCP relaxation
+%% YALMIP
 clc; clear; close all;
 
 x = sdpvar(2,1); % [x1, x2]
@@ -38,7 +38,7 @@ S_val = value(S);
 
 M = dual(F(1)); % moment matrix
 
-%% U computation from CD kernel
+%%
 regpar = 1e-8;
 [V, D] = eig(M);
 eigs = diag(D) + regpar; % Tikhonov regularization 
@@ -72,11 +72,12 @@ for i = 1:Nx
     
 end
 
-u_are_vec = clip(-K_are*X', -1, 1);
-u_err = abs(u_are_vec - u_out);
-u_err > 2/Nu % this is all 0 so u_out is always closest possible to u from ARE
+% surface plot
+U_out = reshape(u_out, size(X1));
+surf(X1, X2, U_out);
 
-%% SOSTools (to check YALMIP)
+
+%% SOSTools (to check)
 clc; clear; close all;
 var = mpvar('var', [3 1]);
 x = var(1:2);
