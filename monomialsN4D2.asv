@@ -1,0 +1,9 @@
+function b_eval = monomialsN4D2(x) % input x is a L by 4 matrix of points
+    for i = 1:size(x, 1)
+        b_eval(i, :) = [1; x; 
+        x(1)^2; x(1)*x(2); x(2)^2; 
+        x(1)*x(3); x(2)*x(3); x(3)^2; 
+        x(1)*x(4); x(2)*x(4); x(3)*x(4); x(4)^2];
+    end
+
+end
