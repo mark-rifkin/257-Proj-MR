@@ -15,7 +15,7 @@ params.l = 1;
 params.b = 0.1;
 params.g = 9.8;
 f = pendulum_dynamics(x, u, params); % pendulum dynamics dx/dt
-g = x(1)^2 + x(2)^2 + x(3)^2 + 0.25*u^2; % quadratic cost
+g = x(1)^2 + (x(2)+1)^2 + x(3)^2 + 0.25*u^2; % quadratic cost
 
 S = sdpvar(s(p, d)); % value function gram matrix
 J = monolist(x, d)'*S*monolist(x, d); % value function in x
@@ -23,25 +23,49 @@ J = monolist(x, d)'*S*monolist(x, d); % value function in x
 % Constraint for HJB being SOS
 HJB = jacobian(J, x) * f + g; % HJB
 
-Q = sdpvar(s(n, d)); % SOS gram matrix
-sig = b' * Q * b; % SOS polynomial 
+Q0 = sdpvar(s(n, d)); % SOS gram matrix
+sig0 = b' * Q0 * b; % SOS polynomial 
 
-% Constraint for sin^2+cos^2 = 1
+F = Q0>=0;
+rhs = sig0;
+
+% State and control inequality constraints 
+g = [x(1) + 1;
+ -x(1) + 1; 
+ x(2) + 1;
+-x(2) + 1; 
+x(3) + 2*pi;
+-x(3) + 2*pi;
+u + 1;
+- u + 1];
+
+for i = 1:length(g)
+   deg_sig = floor((d - degree(g(i)))/2);
+   Qi = sdpvar(s(n, deg_sig)); 
+   F = [F, Qi >= 0];
+   sigi = monolist([x; u], deg_sig)'*Qi*monolist([x; u], deg_sig);
+   rhs = rhs + sigi*g(i);
+end
+
+
+% State equality constraint
 h = x(1)^2 + x(2)^2 - 1;
-r = sdpvar(s(n, d - degree(h)), 1); 
-lam = monolist([x; u], d - degree(h))'*r; % arbitrary polynomial
+deg_lam = d - degree(h);
+r = sdpvar(s(n, deg_lam), 1);
+lam = monolist([x; u], deg_lam)'*r;
+rhs = rhs + lam*h;
 
-HJB_constr = coefficients(HJB - sig - lam*h, [x; u]) == 0; % HJB is nonnegative (psatz)
+HJB_constr = coefficients(HJB - rhs, [x; u]) == 0; % HJB is nonnegative (psatz)
 
-target_x_mon = monomialsN3D2([0, -1, 0]);
-target_constr = target_x_mon * S * target_x_mon' == 0; % cost at top of pendulum = 0
+target_x = [0; -1; 0];
+target_constr = replace(J, x, target_x) == 0; % cost at top of pendulum = 0
  
 % Collect constraints
-F = [Q>=0, HJB_constr, target_constr];
+F = [F, HJB_constr, target_constr];
 
 % set objective (maximize J at x0)
-x0_mon = monomialsN3D2([0, 1, 0]); % bottomright position, theta=0
-obj = -x0_mon*S*x0_mon';
+x0 = [0; 1; 0];
+obj = -replace(J, x, x0);
 
 options = sdpsettings('solver','mosek');
 optimize(F,obj,options);
@@ -65,7 +89,7 @@ x2_vals = x1_vals;
 x3_vals = x1_vals;
 
 % samples of u
-Nu = 100;
+Nu = 101;
 u_vals = linspace(-1, 1, Nu);
 
 % create all sample combinations of x and u
@@ -91,11 +115,12 @@ x0 = [0, 1, 0];
 x_traj = x0;
 
 
+% samples of u
+Nu = 101;
+u_vals = linspace(-1, 1, Nu);
+Nx = 1;
+
 for i = 1:N_breaks
-    % samples of u
-    Nu = 1000;
-    u_vals = linspace(-1, 1, Nu);
-    Nx = 1;
 
     [U, X3, X2, X1] = ndgrid(u_vals, x0(3), x0(2), x0(1)); 
     X1 = X1(:); X2 = X2(:); X3 = X3(:); U = U(:);

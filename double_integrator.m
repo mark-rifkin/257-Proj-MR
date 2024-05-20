@@ -16,17 +16,39 @@ J = monolist(x, d)'*S*monolist(x, d); % value function in x
 
 HJB = jacobian(J, x) * f + g; % HJB
 
-Q = sdpvar(s(3, d)); % SOS gram matrix
-sig = b' * Q * b; % SOS polynomial equal to HJB
+Q0 = sdpvar(s(3, d)); % SOS gram matrix
+sig0 = b' * Q0 * b; % SOS polynomial
 
-target = [1; 0; 0;]' * S * [1; 0; 0]; % target constraint (wasy to use subs?)
- 
+F = Q0 >=0;
+rhs = sig0; 
+
+% State and control inequality constraints 
+g = [x(1) + 1;
+ -x(1) + 1; 
+ x(2) + 1;
+-x(2) + 1; 
+u + 1;
+- u + 1];
+
+for i = 1:length(g)
+   deg_sig = floor((d - degree(g(i)))/2);
+   Qi = sdpvar(s(3, deg_sig)); 
+   F = [F, Qi >= 0];
+   sigi = monolist([x; u], deg_sig)'*Qi*monolist([x; u], deg_sig);
+   rhs = rhs + sigi*g(i);
+end
+
+HJB_constr = coefficients(HJB - rhs, [x; u]) == 0; % HJB is nonnegative (psatz)
+
+target_x = [0; 0];
+target_constr =  replace(J, x, target_x) == 0; % target constraint 
+
 % Collect constraints
-F = [Q>=0, coefficients(HJB - sig, [x; u]) == 0, target == 0];
+F = [F; HJB_constr, target_constr];
 
 % set objective (maximize J at x0)
-x0 = [1; 0.5; 1];
-obj = -x0'*S*x0;
+x0 = [0.5; 1];
+obj = -replace(J, x, x0);
 
 options = sdpsettings('solver','mosek');
 optimize(F,obj,options);
