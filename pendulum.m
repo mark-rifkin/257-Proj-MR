@@ -6,8 +6,8 @@ n = p + 1; % [x; u] in R^n
 x = sdpvar(p, 1); % [s c thdot]
 u = sdpvar(1);
 
-kappa = 1; % relaxation order
-d = 2*kappa; % degree -- hardcoded monomial methods need to be rewritten if changed
+kappa = 2; % relaxation order
+d = 2*kappa; % degree
 b = monolist([x; u], d); % monomial basis
 
 params.m = 1;
@@ -15,38 +15,45 @@ params.l = 1;
 params.b = 0.1;
 params.g = 9.8;
 f = pendulum_dynamics(x, u, params); % pendulum dynamics dx/dt
-g = x(1)^2 + (x(2)+1)^2 + x(3)^2 + 0.25*u^2; % quadratic cost
+target_x = [0; -1; 0];
+x_err = x - target_x;
+cost = x_err'*eye(p)*x_err + u^2; % quadratic cost
 
 S = sdpvar(s(p, d)); % value function gram matrix
 J = monolist(x, d)'*S*monolist(x, d); % value function in x
 
-% Constraint for HJB being SOS
-HJB = jacobian(J, x) * f + g; % HJB
-
-Q0 = sdpvar(s(n, d)); % SOS gram matrix
-sig0 = b' * Q0 * b; % SOS polynomial 
-
-F = Q0>=0;
-rhs = sig0;
+HJB = jacobian(J, x) * f + cost; % HJB
 
 % State and control inequality constraints 
 g = [x(1) + 1;
  -x(1) + 1; 
  x(2) + 1;
 -x(2) + 1; 
-x(3) + 2*pi;
--x(3) + 2*pi;
+x(3) + 4*pi;
+-x(3) + 4*pi;
 u + 1;
 - u + 1];
 
-for i = 1:length(g)
-   deg_sig = floor((d - degree(g(i)))/2);
-   Qi = sdpvar(s(n, deg_sig)); 
-   F = [F, Qi >= 0];
-   sigi = monolist([x; u], deg_sig)'*Qi*monolist([x; u], deg_sig);
-   rhs = rhs + sigi*g(i);
-end
+Q = cell(1+length(g), 1);
+sig = cell(1+length(g), 1);
 
+% g0 constraint
+Q{1} = sdpvar(s(n, d)); % SOS gram matrix
+sig{1} = b' * Q{1} * b; % SOS polynomial 
+
+F = Q{1}>= 0;
+rhs = sig{1};
+
+for i = 1:length(g)
+    % generate SOS multiplier
+   deg_sig = floor((d - degree(g(i)))/2);
+   Q{i+1} = sdpvar(s(n, deg_sig)); 
+   sig{i+1} = monolist([x; u], deg_sig)'*Q{i+1}*monolist([x; u], deg_sig);
+
+   F = [F, Q{i+1} >=0];  % sig(x) is SOS
+  
+   rhs = rhs + sig{i+1}*g(i);
+end
 
 % State equality constraint
 h = x(1)^2 + x(2)^2 - 1;
@@ -57,7 +64,6 @@ rhs = rhs + lam*h;
 
 HJB_constr = coefficients(HJB - rhs, [x; u]) == 0; % HJB is nonnegative (psatz)
 
-target_x = [0; -1; 0];
 target_constr = replace(J, x, target_x) == 0; % cost at top of pendulum = 0
  
 % Collect constraints
@@ -95,8 +101,8 @@ u_vals = linspace(-1, 1, Nu);
 % create all sample combinations of x and u
 [U, X3, X2, X1] = ndgrid(u_vals, x3_vals, x2_vals, x1_vals); % U changes faster than X3 than X2 than X1
 X1 = X1(:); X2 = X2(:); X3 = X3(:); U = U(:);
-
-b_eval = monomialsN4D2([X1, X2, X3, U]); % degree 2 monomial vector at all points
+tic;
+b_eval = eval_monomials([X1, X2, X3, U], d); % degree d monomial vector at all points
 q_eval = reshape(sum(b_eval*Psq.*b_eval, 2), Nu, Nx)'; % dot product -> sum to avoid multiplying large matrix
 % q_eval is a Nx by Nu matrix where u is compared in each row
 [~, idx] = min(q_eval, [], 2); % this will also take outer min as u is sorted in ascending order
@@ -124,7 +130,7 @@ for i = 1:N_breaks
 
     [U, X3, X2, X1] = ndgrid(u_vals, x0(3), x0(2), x0(1)); 
     X1 = X1(:); X2 = X2(:); X3 = X3(:); U = U(:);
-    b_eval = monomialsN4D2([X1, X2, X3, U]); % degree 2 monomial vector at all points
+    b_eval = eval_monomials([X1, X2, X3, U], d); % degree d monomial vector at all points
     q_eval = reshape(sum(b_eval*Psq.*b_eval, 2), Nu, Nx)'; % dot product -> sum to avoid multiplying large matrix
     % q_eval is a Nx by Nu matrix where u is compared in each row
     [~, idx] = min(q_eval, [], 2); % this will also take outer min as u is sorted in ascending order

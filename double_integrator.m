@@ -4,17 +4,17 @@ clc; clear; close all;
 x = sdpvar(2,1); % [x1, x2]
 u = sdpvar(1);
 
-d = 1; % relaxation order
+kappa = 0.5; % relaxation order
+d = 2*kappa; % degree
 b = monolist([x; u], d); % monomial basis
 
-
 f = [x(2); u]; % double integrator dynamics dx/dt
-g = x(1)^2 + x(2)^2 + u^2; % quadratic cost
+cost = x(1)^2 + x(2)^2 + u^2; % quadratic cost
 
 S = sdpvar(s(2, d)); % value function gram matrix
 J = monolist(x, d)'*S*monolist(x, d); % value function in x
 
-HJB = jacobian(J, x) * f + g; % HJB
+HJB = jacobian(J, x) * f + cost; % HJB
 
 Q0 = sdpvar(s(3, d)); % SOS gram matrix
 sig0 = b' * Q0 * b; % SOS polynomial
@@ -37,7 +37,7 @@ for i = 1:length(g)
    sigi = monolist([x; u], deg_sig)'*Qi*monolist([x; u], deg_sig);
    rhs = rhs + sigi*g(i);
 end
-
+  
 HJB_constr = coefficients(HJB - rhs, [x; u]) == 0; % HJB is nonnegative (psatz)
 
 target_x = [0; 0];
@@ -76,14 +76,14 @@ x1_vals = linspace(-1, 1, Nxrt);
 x2_vals = x1_vals;
 
 % samples of u
-Nu = 10000;
+Nu = 1000;
 u_vals = linspace(-1, 1, Nu);
 
 % create all sample combinations of x and u
 [U, X2, X1] = ndgrid(u_vals, x2_vals, x1_vals); % U changes faster than X2 than X1
 X1 = X1(:); X2 = X2(:); U = U(:);
 
-b_eval = [ones(Nx*Nu, 1), X1, X2, U]; % 1-degree monomial vector at all points
+b_eval = eval_monomials([X1, X2, U], d); % degree d monomial vector at all points
 q_eval = reshape(sum(b_eval*Psq.*b_eval, 2), Nu, Nx)'; % dot product -> sum to avoid multiplying large matrix
 % q_eval is a Nx by Nu matrix where u is compared in each row
 [~, idx] = min(q_eval, [], 2); % this will also take outer min s u is sorted in ascending orderciln
