@@ -1,5 +1,6 @@
 %% YALMIP OCP relaxation
 clc; clear; close all;
+addpath(genpath(pwd));
 
 x = sdpvar(2,1); % [x1, x2]
 u = sdpvar(1);
