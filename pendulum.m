@@ -7,7 +7,7 @@ n = p + 1; % [x; u] in R^n
 x = sdpvar(p, 1); % [s c thdot]
 u = sdpvar(1);
 
-kappa = 1; % relaxation order
+kappa = 2; % relaxation order
 d = 2*kappa; % degree
 b = monolist([x; u], d); % monomial basis
 
@@ -35,6 +35,7 @@ x(3) + thdot_bound;
 -x(3) + thdot_bound;
 u + 1;
 - u + 1];
+g = [1- [x; u]'*[x; u]];
 
 Q = cell(1+length(g), 1);
 sig = cell(1+length(g), 1);
@@ -72,7 +73,7 @@ target_constr = replace(J, x, target_x) == 0; % cost at top of pendulum = 0
 F = [F, HJB_constr, target_constr];
 
 % set objective (maximize J at x0)
-x0 = [0; 1; 0];
+x0 = [sin(0.1); cos(0.1); 0];
 obj = -replace(J, x, x0);
 
 options = sdpsettings('solver','mosek');

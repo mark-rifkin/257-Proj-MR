@@ -5,7 +5,7 @@ addpath(genpath(pwd));
 x = sdpvar(2,1); % [x1, x2]
 u = sdpvar(1);
 
-kappa = 0.5; % relaxation order
+kappa = 4; % relaxation order
 d = 2*kappa; % degree
 b = monolist([x; u], d); % monomial basis
 
@@ -24,12 +24,9 @@ F = Q0 >=0;
 rhs = sig0; 
 
 % State and control inequality constraints 
-g = [x(1) + 1;
- -x(1) + 1; 
- x(2) + 1;
--x(2) + 1; 
-u + 1;
-- u + 1];
+g = [1-x(2)^2;
+    1-x(1)^2;
+1-u^2];
 
 for i = 1:length(g)
    deg_sig = floor((d - degree(g(i)))/2);
