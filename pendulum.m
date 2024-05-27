@@ -7,7 +7,7 @@ n = p + 1; % [x; u] in R^n
 x = sdpvar(p, 1); % [s c thdot]
 u = sdpvar(1);
 
-kappa = 2; % relaxation order
+kappa = 1; % relaxation order
 d = 2*kappa; % degree
 b = monolist([x; u], d); % monomial basis
 
@@ -16,25 +16,20 @@ params.l = 1;
 params.b = 0.1;
 params.g = 9.8;
 [f, f2] = pendulum_dynamics(x, u, params); % pendulum dynamics dx/dt
-target_x = [0; -1; 0];
-x_err = x - target_x;
-cost = x_err'*eye(p)*x_err + u^2; % quadratic cost
+rho = 0.01;
+% target_x = [0; -1; 0];
+target_x = [0; 0; 0];
+
+% x_err = x - target_x;
+cost = x'*eye(p)*x + u^2; % quadratic cost
 
 S = sdpvar(s(p, d)); % value function gram matrix
 J = monolist(x, d)'*S*monolist(x, d); % value function in x
 
-HJB = jacobian(J, x) * f + cost; % HJB
+HJB = -rho*J + jacobian(J, x) * f + cost; % HJB
 
-thdot_bound = 4*pi;
 % State and control inequality constraints 
-g = [x(1) + 1;
- -x(1) + 1; 
- x(2) + 1;
--x(2) + 1; 
-x(3) + thdot_bound;
--x(3) + thdot_bound;
-u + 1;
-- u + 1];
+
 g = [1- [x; u]'*[x; u]];
 
 Q = cell(1+length(g), 1);
@@ -73,7 +68,7 @@ target_constr = replace(J, x, target_x) == 0; % cost at top of pendulum = 0
 F = [F, HJB_constr, target_constr];
 
 % set objective (maximize J at x0)
-x0 = [sin(0.1); cos(0.1); 0];
+x0 = [sin(0.1*pi); 1+cos(0.1*pi); 0];
 obj = -replace(J, x, x0);
 
 options = sdpsettings('solver','mosek');
@@ -107,7 +102,7 @@ u_vals = linspace(-1, 1, Nu);
 [U, Th, Thdot] = ndgrid(u_vals, th_vals, thdot_vals); % all sample combinations of x and u
 U = U(:);
 X1 = sin(Th(:)); 
-X2 = cos(Th(:));
+X2 = cos(Th(:))-1;
 X3 = Thdot(:);
 
 b_eval = eval_monomials([X1, X2, X3, U], d); % degree d monomial vector at all points
@@ -119,7 +114,7 @@ u_out = u_vals(idx);
 %% Compute u directly from dJ/dx at sample x
 [Th, Thdot] = ndgrid(th_vals, thdot_vals);
 X1 = sin(Th(:)); 
-X2 = cos(Th(:));
+X2 = cos(Th(:))-1;
 X3 = Thdot(:);
 
 mu = -0.5*f2'*jacobian(J, x)';
@@ -137,7 +132,7 @@ th_vals = [-pi, -3.141, -3.14, -3.1];
 thdot_vals = 0;
 [Th, Thdot] = ndgrid(th_vals, thdot_vals);
 X1 = sin(Th(:)); 
-X2 = cos(Th(:));
+X2 = cos(Th(:))-1;
 X3 = Thdot(:);
 
 x0 = [X1(:), X2(:), X3(:)];
@@ -183,7 +178,7 @@ for i = 1:N_breaks
     x_traj = [x_traj; x0];
 end
 
-th_thdot_traj = [atan2(x_traj(:, 1), x_traj(:, 2)), x_traj(:, 3)];
+th_thdot_traj = [atan2(x_traj(:, 1), x_traj(:, 2)-1), x_traj(:, 3)];
 figure;
 plot(th_thdot_traj(:, 1), th_thdot_traj(:, 2));
 xlabel("$\theta$", 'Interpreter', 'latex');

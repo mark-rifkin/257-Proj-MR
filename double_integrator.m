@@ -5,7 +5,7 @@ addpath(genpath(pwd));
 x = sdpvar(2,1); % [x1, x2]
 u = sdpvar(1);
 
-kappa = 4; % relaxation order
+kappa = 1; % relaxation order
 d = 2*kappa; % degree
 b = monolist([x; u], d); % monomial basis
 
@@ -15,7 +15,7 @@ cost = x(1)^2 + x(2)^2 + u^2; % quadratic cost
 S = sdpvar(s(2, d)); % value function gram matrix
 J = monolist(x, d)'*S*monolist(x, d); % value function in x
 
-HJB = jacobian(J, x) * f + cost; % HJB
+HJB = -0.5*J + jacobian(J, x) * f + cost; % HJB
 
 Q0 = sdpvar(s(3, d)); % SOS gram matrix
 sig0 = b' * Q0 * b; % SOS polynomial
@@ -24,9 +24,7 @@ F = Q0 >=0;
 rhs = sig0; 
 
 % State and control inequality constraints 
-g = [1-x(2)^2;
-    1-x(1)^2;
-1-u^2];
+g = [1-[x; u]'*[x; u]];
 
 for i = 1:length(g)
    deg_sig = floor((d - degree(g(i)))/2);
@@ -74,7 +72,7 @@ x1_vals = linspace(-1, 1, Nxrt);
 x2_vals = x1_vals;
 
 % samples of u
-Nu = 1000;
+Nu = 20001;
 u_vals = linspace(-1, 1, Nu);
 
 % create all sample combinations of x and u
@@ -89,39 +87,19 @@ u_out = u_vals(idx);
 
 % calculate correct u from ARE
 [X1_noU, X2_noU] = meshgrid(x1_vals, x2_vals); X1_noU = X1_noU(:); X2_noU = X2_noU(:);
-u_are_vec = clip(-K_are*[X1_noU, X2_noU]', -1, 1);
-u_err = abs(u_are_vec - u_out);
+u_are = clip(-K_are*[X1_noU, X2_noU]', -1, 1);
+u_err = abs(u_are - u_out);
 
 find(u_err > 2/Nu) % this is empty if u_out is closest possible to ARE
-%% SOSTools (to check YALMIP)
-clc; clear; close all;
-var = mpvar('var', [3 1]);
-x = var(1:2);
-u = var(end);
 
-prog = sosprogram(var);
+%% Compare CD kernel method and direct from J method
 
-degree = 2;
-[prog, J] = sospolyvar(prog, monomials(x, 0:degree));
+mu = -0.5*[0; 1]'*jacobian(J, x)';
 
-f = [x(2); u]; % double integrator dynamics dx/dt
-g = x(1)^2 + x(2)^2 + u^2; % quadratic cost
+u_direct = zeros(size(X1_noU));
 
-% HJB inequality constraint
-HJB = diff(J, x)*f + g;
-prog = sosineq(prog, HJB);
+for i = 1:length(u_direct)
+    u_direct(i) = clip(replace(mu, x, [X1_noU(i); X2_noU(i)]), -1, 1);
+end
 
-% Target value 0 equality constraint
-J_0 = subs(J, x, [0; 0]);
-prog = soseq(prog, J_0);
-
-% set objective (maximize J at x0)
-x0 = [0.5; 1];
-J_x0 = subs(J, x, x0);
-prog = sossetobj(prog, -J_x0);
-
-% solve for J
-options.solver = 'mosek';
-prog = sossolve(prog, options);
-Jstar = sosgetsol(prog, J);
-
+find(u_out-u_direct' > 2/Nu)
